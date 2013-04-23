@@ -358,9 +358,9 @@ get_dates_int(VHost) ->
     Tables = mnesia:system_info(tables),
     lists:foldl(fun(ATable, Dates) ->
                     Table = atom_to_list(ATable),
-                    case regexp:match(Table, VHost++"$") of
+                    case re:run(Table, VHost++"$") of
                          {match, _, _} ->
-                            case regexp:match(Table,"_[0-9]+-[0-9]+-[0-9]+_") of
+                            case re:run(Table,"_[0-9]+-[0-9]+-[0-9]+_") of
                                  {match, S, E} ->
                                      lists:append(Dates, [lists:sublist(Table,S+1,E-2)]);
                                  nomatch ->

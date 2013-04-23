@@ -329,7 +329,7 @@ handle_call({set_user_settings, User, #user_settings{dolog_default=DoLogDef,
                        ?MYDEBUG("New settings for ~s@~s", [User, VHost]),
                        ok;
                    {error, Reason} ->
-                       case regexp:match(Reason, "#23000") of
+                       case re:run(Reason, "#23000") of
                             % Already exists
                             {match, _, _} ->
                                 ok;
@@ -485,9 +485,9 @@ get_dates_int(DBRef, VHost) ->
          {data, Tables} ->
             lists:foldl(fun([Table], Dates) ->
                            Reg = lists:sublist(prefix(),2,length(prefix())) ++ ".*" ++ escape_vhost(VHost),
-                           case regexp:match(Table, Reg) of
+                           case re:run(Table, Reg) of
                                 {match, 1, _} ->
-                                   case regexp:match(Table,"[0-9]+-[0-9]+-[0-9]+") of
+                                   case re:run(Table,"[0-9]+-[0-9]+-[0-9]+") of
                                         {match, S, E} ->
                                             lists:append(Dates, [lists:sublist(Table,S,E)]);
                                         nomatch ->
@@ -702,7 +702,7 @@ create_stats_table(#state{dbref=DBRef, vhost=VHost}=State) ->
             rebuild_all_stats_int(State),
             ok;
          {error, Reason} ->
-            case regexp:match(Reason, "#42S01") of
+            case re:run(Reason, "#42S01") of
                  {match, _, _} ->
                    ?MYDEBUG("Stats table for ~p already exists", [VHost]),
                    CheckQuery = ["SHOW COLUMNS FROM ",SName," LIKE 'peer_%_id';"],
@@ -841,7 +841,7 @@ get_user_id(DBRef, VHost, User) ->
                    DBIdNew;
                {error, Reason} ->
                    % this can be in clustered environment
-                   {match, _, _} = regexp:match(Reason, "#23000"),
+                   {match, _, _} = re:run(Reason, "#23000"),
                    ?ERROR_MSG("Duplicate key name for ~p", [User]),
                    {data, [[ClID]]} = sql_query_internal(DBRef, SQuery),
                    ClID
