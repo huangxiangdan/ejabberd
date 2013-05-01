@@ -516,7 +516,7 @@ pgsql_item_to_odbc(_) ->
 mysql_connect(Server, Port, DB, Username, Password) ->
     case mysql_conn:start(Server, Port, Username, Password, DB, fun log/3) of
 	{ok, Ref} ->
-            mysql_conn:fetch(Ref, ["set names 'utf8';"], self()),
+            mysql_conn:fetch(Ref, ["set names 'utf8mb4';"], self()),
 	    {ok, Ref};
 	Err ->
 	    Err
