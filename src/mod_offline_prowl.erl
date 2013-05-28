@@ -63,18 +63,17 @@ send_notice(_From, To, Packet) ->
     FromID = element(2, _From),
     FromServer = element(3, _From),
     From = [FromID, "@", FromServer],
-    ToS   = xml:get_tag_attr_s("to", Packet),
     Body = xml:get_path_s(Packet, [{elem, "body"}, cdata]),
+    if
+	(Type == "chat") and (Body /= "") ->
+    ToS   = xml:get_tag_attr_s("to", Packet),
     ToJID = string:sub_word(ToS,1,$/),
     ToServer = string:sub_word(ToJID,2,$@),
     APIKeys = gen_mod:get_module_opt(To#jid.lserver, ?MODULE, apikeys, [] ),
     APIKey = lists:keyfind(ToServer, 1, APIKeys),
     Addresses = gen_mod:get_module_opt(To#jid.lserver, ?MODULE, addresses, [] ),
-    APIKey = lists:keyfind(ToServer, 1, APIKeys),
     Address = element(2,lists:keyfind(ToServer, 1, Addresses)),
     ?INFO_MSG("Found API Key for ~s. Will post message to ~s.~n", [element(1,APIKey), Address] ),
-    if
-	(Type == "chat") and (Body /= "") and (APIKey /= false) ->
 	  Sep = "&",
 	  Post = [
 	    "api_token=", element(2,APIKey), Sep,
