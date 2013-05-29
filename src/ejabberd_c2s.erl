@@ -1201,7 +1201,10 @@ handle_info(replaced, _StateName, StateData) ->
     send_trailer(StateData),
     {stop, normal, StateData#state{authenticated = replaced}};
 %% Process Packets that are to be send to the user
-handle_info({route, From, To, Packet}, StateName, StateData) ->
+handle_info({route, OrigFrom, OrigTo, OrigPacket}, StateName, StateData) ->
+    FilterPacket = ejabberd_hooks:run_fold(filter_local_packet, {OrigFrom, OrigTo, OrigPacket}, []),
+    case FilterPacket of
+      {From, To, Packet} ->
     {xmlelement, Name, Attrs, Els} = Packet,
     {Pass, NewAttrs, NewState} =
 	case Name of
