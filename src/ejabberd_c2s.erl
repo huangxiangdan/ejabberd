@@ -1413,6 +1413,8 @@ handle_info({route, OrigFrom, OrigTo, OrigPacket}, StateName, StateData) ->
 	    ejabberd_hooks:run(c2s_loop_debug, [{route, From, To, Packet}]),
 	    fsm_next_state(StateName, NewState)
     end;
+  _ ->  fsm_next_state(StateName, StateData)
+    end;
 handle_info({'DOWN', Monitor, _Type, _Object, _Info}, _StateName, StateData)
   when Monitor == StateData#state.socket_monitor ->
     {stop, normal, StateData};

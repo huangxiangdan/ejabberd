@@ -101,7 +101,12 @@ loop(Host, AccessMaxOfflineMsgs) ->
 	    Len = length(Msgs),
 	    MaxOfflineMsgs = get_max_user_messages(AccessMaxOfflineMsgs,
 						   UserServer, Host),
-            store_offline_msg(Host, UserServer, Msgs, Len, MaxOfflineMsgs, DBType),
+            try 
+              store_offline_msg(Host, UserServer, Msgs, Len, MaxOfflineMsgs, DBType)
+            catch
+              _:X ->
+                ?ERROR_MSG("when store_offline_msg catch ERROR_MSG: ~p", [X])
+            end,
             loop(Host, AccessMaxOfflineMsgs);
         _ ->
 	    loop(Host, AccessMaxOfflineMsgs)
