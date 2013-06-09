@@ -510,6 +510,34 @@ packet_parse(Owner, Peer, Packet, Direction, State) ->
          false ->
            ignore;
          Body_xml ->
+           case xml:get_subtag(Packet, "html") of
+              false ->
+                ok;
+              Html_xml ->
+                case xml:get_subtag(Html_xml, "body") of
+                  false -> 
+                    ok;
+                  Extra_parent_xml ->
+                    case xml:get_subtag(Extra_parent_xml, "extra") of
+                      false ->
+                        ok;
+                      Extra_xml ->
+                        case xml:get_subtag(Extra_xml, "log") of
+                          false ->
+                            ok;
+                          Log_xml ->
+                            Log_body = xml:get_tag_cdata(Log_xml),
+                            case Log_body of
+                              "false" ->
+                                throw(ignore);
+                              _ ->
+                                ok
+                            end
+                        end
+                    end
+                end
+            end,
+
            Message_type =
               case xml:get_tag_attr_s("type", Packet) of
                    [] -> "normal";
