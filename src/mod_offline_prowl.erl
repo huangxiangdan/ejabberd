@@ -64,6 +64,7 @@ send_notice(_From, To, Packet) ->
     FromServer = element(3, _From),
     From = [FromID, "@", FromServer],
     Body = xml:get_path_s(Packet, [{elem, "body"}, cdata]),
+    Delay = xml:get_path_s(Packet, [{elem, "delay"}, cdata]),
     if
 	(Type == "chat") and (Body /= "") ->
     ToS   = xml:get_tag_attr_s("to", Packet),
@@ -74,25 +75,32 @@ send_notice(_From, To, Packet) ->
         ToJID = string:sub_word(ToS,1,$/),
         ToServer = string:sub_word(ToJID,2,$@),
         APIKeys = gen_mod:get_module_opt(To#jid.lserver, ?MODULE, apikeys, [] ),
-        APIKey = lists:keyfind(ToServer, 1, APIKeys),
         Addresses = gen_mod:get_module_opt(To#jid.lserver, ?MODULE, addresses, [] ),
-        Address = element(2,lists:keyfind(ToServer, 1, Addresses)),
-        ?INFO_MSG("Found API Key for ~s. Will post message to ~s.~n", [element(1,APIKey), Address] ),
-    	  Sep = "&",
-    	  Post = [
-    	    "api_token=", element(2,APIKey), Sep,
-    	    % "application=XMPP", Sep,
-    	    % "event=New%20Chat", Sep,
-    	    "message=", Body, Sep,
-          "from=", From, Sep,
-    	    % "priority=-1", Sep,
-    	    "to=", string:sub_word(ToS,1,$/) ],
-        Content = list_to_binary(Post),
+        AddressArray = lists:keyfind(ToServer, 1, Addresses),
+        
+        case AddressArray of
+          false ->
+            ok;
+          _ ->
+            Address = element(2,AddressArray),
+            APIKey = lists:keyfind(ToServer, 1, APIKeys),
+            ?INFO_MSG("Found API Key for ~s. Will post message to ~s.~n", [element(1,APIKey), Address] ),
+            Sep = "&",
+            Post = [
+              "api_token=", element(2,APIKey), Sep,
+              % "application=XMPP", Sep,
+              % "event=New%20Chat", Sep,
+              "message=", Body, Sep,
+              "from=", From, Sep,
+              % "priority=-1", Sep,
+              "to=", string:sub_word(ToS,1,$/) ],
+            Content = list_to_binary(Post),
 
-    	  httpc:request(post, {Address, [], "application/x-www-form-urlencoded", Content},[],[]),
-	      ok
+            httpc:request(post, {Address, [], "application/x-www-form-urlencoded", Content},[],[]),
+            ok
+        end
     end;
-	true ->
-	  ok
+  true ->
+    ok
     end.
 
