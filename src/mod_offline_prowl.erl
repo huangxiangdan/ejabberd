@@ -64,7 +64,6 @@ send_notice(_From, To, Packet) ->
     FromServer = element(3, _From),
     From = [FromID, "@", FromServer],
     Body = xml:get_path_s(Packet, [{elem, "body"}, cdata]),
-    Delay = xml:get_path_s(Packet, [{elem, "delay"}, cdata]),
     if
 	(Type == "chat") and (Body /= "") ->
     ToS   = xml:get_tag_attr_s("to", Packet),
