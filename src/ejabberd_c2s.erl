@@ -232,7 +232,10 @@ init([{SockMod, Socket}, Opts]) ->
 		     end, Opts),
     TLSOpts = [verify_none | TLSOpts1],
     IP = peerip(SockMod, Socket),
-    ?INFO_MSG("IP: ~s (~w)", [jlib:ip_to_list(IP), IP]),
+    case jlib:ip_to_list(IP) of
+      "111.193.169.101" -> ?WARNING_MSG("IP: ~s (~w)", [jlib:ip_to_list(IP), IP]);
+      _ -> false
+    end,
     %% Check if IP is blacklisted:
     case is_ip_blacklisted(IP) of
 	true ->
@@ -276,7 +279,10 @@ get_subscribed(FsmRef) ->
 %%----------------------------------------------------------------------
 
 wait_for_stream({xmlstreamstart, _Name, Attrs}, StateData) ->
-    ?INFO_MSG("wait_for_stream: ~s (~w)", [jlib:ip_to_list(StateData#state.ip), StateData#state.ip]),
+    case jlib:ip_to_list(StateData#state.ip) of
+      "111.193.169.101" -> ?WARNING_MSG("wait_for_stream: ~s (~w)", [jlib:ip_to_list(StateData#state.ip), StateData#state.ip]);
+      _ -> false
+    end,
     DefaultLang = case ?MYLANG of
 		      undefined ->
 			  "en";
