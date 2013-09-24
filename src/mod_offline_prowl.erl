@@ -35,14 +35,14 @@
 	 stop/1,
 	 send_notice/3]).
 
--define(PROCNAME, ?MODULE).
+-define(PROCNAME, ejabberd_offline_prowl).
 
 -include("ejabberd.hrl").
 -include("jlib.hrl").
 
 start(Host, Opts) ->
     ?INFO_MSG("Starting mod_offline_prowl", [] ),
-    register(?PROCNAME,spawn(?MODULE, init, [Host, Opts])),  
+    register(gen_mod:get_module_proc(Host, ?PROCNAME),spawn(?MODULE, init, [Host, Opts])),
     ok.
 
 init(Host, _Opts) ->
