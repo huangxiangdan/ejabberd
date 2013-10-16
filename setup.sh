@@ -15,9 +15,9 @@ cd ../ejabberd && chmod +x build.sh
 
 echo "configure ejabberd"
 cd ..
-cp server.pem /etc/ejabberd/
-cp ejabberd.cfg /etc/ejabberd/
-cp ejabberdctl.cfg /etc/ejabberd/
+sudo cp server.pem /etc/ejabberd/
+sudo cp ejabberd.cfg /etc/ejabberd/
+sudo cp ejabberdctl.cfg /etc/ejabberd/
 
 echo "done"
 
