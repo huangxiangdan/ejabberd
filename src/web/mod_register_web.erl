@@ -80,58 +80,70 @@ stop(_Host) ->
 %%% HTTP handlers
 %%%----------------------------------------------------------------------
 
-process([], #request{method = 'GET', lang = Lang}) ->
-    index_page(Lang);
+% process([], #request{method = 'GET', lang = Lang}) ->
+%     index_page(Lang);
 
 process(["register.css"], #request{method = 'GET'}) ->
     serve_css();
 
 process(["new"], #request{method = 'GET', lang = Lang, host = Host, ip = IP}) ->
     {Addr, _Port} = IP,
-    form_new_get(Host, Lang, Addr);
+    IPAccess = get_ip_access(Host),
+    case check_ip_access(Addr, IPAccess) of
+  deny ->
+      {403, [], "forbidden"};
+  allow ->
+    form_new_get(Host, Lang, Addr)
+  end;
 
-process(["delete"], #request{method = 'GET', lang = Lang, host = Host}) ->
-    form_del_get(Host, Lang);
+% process(["delete"], #request{method = 'GET', lang = Lang, host = Host}) ->
+%     form_del_get(Host, Lang);
 
-process(["change_password"], #request{method = 'GET', lang = Lang, host = Host}) ->
-    form_changepass_get(Host, Lang);
+% process(["change_password"], #request{method = 'GET', lang = Lang, host = Host}) ->
+%     form_changepass_get(Host, Lang);
 
 process(["new"], #request{method = 'POST', q = Q, ip = {Ip,_Port}, lang = Lang, host = Host}) ->
-    case form_new_post(Q, Host) of
-    	{success, ok, {Username, Host, _Password}} ->
-	    Jid = jlib:make_jid(Username, Host, ""),
-	    send_registration_notifications(Jid, Ip),
-	    Text = ?T("Your Jabber account was successfully created."),
-	    {200, [], Text};
-	Error ->
-	    ErrorText = ?T("There was an error creating the account: ") ++
-		?T(get_error_text(Error)),
-	    {404, [], ErrorText}
-    end;
+    IPAccess = get_ip_access(Host),
+    case check_ip_access(Ip, IPAccess) of
+  deny ->
+      {403, [], "forbidden"};
+  allow ->
+      case form_new_post(Q, Host) of
+      	{success, ok, {Username, Host, _Password}} ->
+  	    Jid = jlib:make_jid(Username, Host, ""),
+  	    send_registration_notifications(Jid, Ip),
+  	    Text = ?T("Your Jabber account was successfully created."),
+  	    {200, [], Text};
+  	Error ->
+  	    ErrorText = ?T("There was an error creating the account: ") ++
+  		?T(get_error_text(Error)),
+  	    {404, [], ErrorText}
+      end
+  end.
 
-process(["delete"], #request{method = 'POST', q = Q, lang = Lang, host = Host}) ->
-    case form_del_post(Q, Host) of
-    	{atomic, ok} ->
-	    Text = ?T("Your Jabber account was successfully deleted."),
-	    {200, [], Text};
-	Error ->
-	    ErrorText = ?T("There was an error deleting the account: ") ++
-		?T(get_error_text(Error)),
-	    {404, [], ErrorText}
-    end;
+% process(["delete"], #request{method = 'POST', q = Q, lang = Lang, host = Host}) ->
+%     case form_del_post(Q, Host) of
+%     	{atomic, ok} ->
+% 	    Text = ?T("Your Jabber account was successfully deleted."),
+% 	    {200, [], Text};
+% 	Error ->
+% 	    ErrorText = ?T("There was an error deleting the account: ") ++
+% 		?T(get_error_text(Error)),
+% 	    {404, [], ErrorText}
+%     end;
 
-%% TODO: Currently only the first vhost is usable. The web request record
-%% should include the host where the POST was sent.
-process(["change_password"], #request{method = 'POST', q = Q, lang = Lang, host = Host}) ->
-    case form_changepass_post(Q, Host) of
-    	{atomic, ok} ->
-	    Text = ?T("The password of your Jabber account was successfully changed."),
-	    {200, [], Text};
-	Error ->
-	    ErrorText = ?T("There was an error changing the password: ") ++
-		?T(get_error_text(Error)),
-	    {404, [], ErrorText}
-    end.
+% %% TODO: Currently only the first vhost is usable. The web request record
+% %% should include the host where the POST was sent.
+% process(["change_password"], #request{method = 'POST', q = Q, lang = Lang, host = Host}) ->
+%     case form_changepass_post(Q, Host) of
+%     	{atomic, ok} ->
+% 	    Text = ?T("The password of your Jabber account was successfully changed."),
+% 	    {200, [], Text};
+% 	Error ->
+% 	    ErrorText = ?T("There was an error changing the password: ") ++
+% 		?T(get_error_text(Error)),
+% 	    {404, [], ErrorText}
+%     end.
 
 %%%----------------------------------------------------------------------
 %%% CSS
@@ -623,3 +635,95 @@ get_error_text({error, passwords_not_identical}) ->
     "The passwords are different";
 get_error_text({error, wrong_parameters}) ->
     "Wrong parameters in the web formulary".
+
+%%%
+%%% ip_access management
+%%%
+
+may_remove_resource({_, _, _} = From) ->
+    jlib:jid_remove_resource(From);
+may_remove_resource(From) ->
+    From.
+
+get_ip_access(Host) ->
+    IPAccess = gen_mod:get_module_opt(Host, ?MODULE, ip_access, []),
+    lists:flatmap(
+      fun({Access, S}) ->
+        case parse_ip_netmask(S) of
+      {ok, IP, Mask} ->
+          [{Access, IP, Mask}];
+      error ->
+          ?ERROR_MSG("mod_register: invalid "
+         "network specification: ~p",
+         [S]),
+          []
+        end
+      end, IPAccess).
+
+parse_ip_netmask(S) ->
+    case string:tokens(S, "/") of
+  [IPStr] ->
+      case inet_parse:address(IPStr) of
+    {ok, {_, _, _, _} = IP} ->
+        {ok, IP, 32};
+    {ok, {_, _, _, _, _, _, _, _} = IP} ->
+        {ok, IP, 128};
+    _ ->
+        error
+      end;
+  [IPStr, MaskStr] ->
+      case catch list_to_integer(MaskStr) of
+    Mask when is_integer(Mask),
+        Mask >= 0 ->
+        case inet_parse:address(IPStr) of
+      {ok, {_, _, _, _} = IP} when Mask =< 32 ->
+          {ok, IP, Mask};
+      {ok, {_, _, _, _, _, _, _, _} = IP} when Mask =< 128 ->
+          {ok, IP, Mask};
+      _ ->
+          error
+        end;
+    _ ->
+        error
+      end;
+  _ ->
+      error
+    end.
+
+check_ip_access(_Source, []) ->
+    allow;
+check_ip_access({User, Server, Resource}, IPAccess) ->
+    case ejabberd_sm:get_user_ip(User, Server, Resource) of
+  {IPAddress, _PortNumber} -> check_ip_access(IPAddress, IPAccess);
+  _ -> true
+    end;
+check_ip_access({_, _, _, _} = IP,
+    [{Access, {_, _, _, _} = Net, Mask} | IPAccess]) ->
+    IPInt = ip_to_integer(IP),
+    NetInt = ip_to_integer(Net),
+    M = bnot ((1 bsl (32 - Mask)) - 1),
+    if
+  IPInt band M =:= NetInt band M ->
+      Access;
+  true ->
+      check_ip_access(IP, IPAccess)
+    end;
+check_ip_access({_, _, _, _, _, _, _, _} = IP,
+    [{Access, {_, _, _, _, _, _, _, _} = Net, Mask} | IPAccess]) ->
+    IPInt = ip_to_integer(IP),
+    NetInt = ip_to_integer(Net),
+    M = bnot ((1 bsl (128 - Mask)) - 1),
+    if
+  IPInt band M =:= NetInt band M ->
+      Access;
+  true ->
+      check_ip_access(IP, IPAccess)
+    end;
+check_ip_access(IP, [_ | IPAccess]) ->
+    check_ip_access(IP, IPAccess).
+
+ip_to_integer({IP1, IP2, IP3, IP4}) ->
+    (((((IP1 bsl 8) bor IP2) bsl 8) bor IP3) bsl 8) bor IP4;
+ip_to_integer({IP1, IP2, IP3, IP4, IP5, IP6, IP7, IP8}) ->
+    (((((((((((((IP1 bsl 16) bor IP2) bsl 16) bor IP3) bsl 16) bor IP4)
+     bsl 16) bor IP5) bsl 16) bor IP6) bsl 16) bor IP7) bsl 16) bor IP8.
