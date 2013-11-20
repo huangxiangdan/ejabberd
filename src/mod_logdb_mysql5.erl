@@ -44,10 +44,17 @@
 
 -record(state, {dbref, vhost, server, port, db, user, password}).
 
+get_vhost_list(VHost) -> 
+  case is_binary(VHost) of
+    true -> binary_to_list(VHost);
+    _ -> VHost
+  end.
+
 % replace "." with "_"
-escape_vhost(VHost) -> lists:map(fun(46) -> 95;
+escape_vhost(VHost) ->
+  lists:map(fun(46) -> 95;
                                     (A) -> A
-                                 end, VHost).
+                                 end, get_vhost_list(VHost)).
 prefix() ->
    "`logdb_".
 
@@ -373,7 +380,7 @@ handle_cast({log_message, Msg}, #state{dbref=DBRef, vhost=VHost}=State) ->
 
             case sql_query_internal(DBRef, Query) of
                  {updated, _} ->
-                    ?MYDEBUG("Logged ok for ~p, peer: ~p", [Msg#msg.owner_name++"@"++VHost,
+                    ?MYDEBUG("Logged ok for ~p, peer: ~p", [Msg#msg.owner_name++"@"++get_vhost_list(VHost),
                                                             Msg#msg.peer_name++"@"++Msg#msg.peer_server]),
                     ok;
                  {error, _Reason} ->

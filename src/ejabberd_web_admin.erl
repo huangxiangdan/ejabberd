@@ -102,6 +102,7 @@ get_jid(Auth, HostHTTP, Method) ->
     end.
 
 get_menu_items(global, cluster, Lang, JID) ->
+    ?INFO_MSG("get_menu_items(~p) ", [JID]),
     {Base, _, Items} = make_server_menu([], [], Lang, JID),
     lists:map(fun ({URI, Name}) ->
 		      {<<Base/binary, URI/binary, "/">>, Name};
@@ -111,6 +112,7 @@ get_menu_items(global, cluster, Lang, JID) ->
 	      Items);
 get_menu_items(Host, cluster, Lang, JID) ->
     {Base, _, Items} = make_host_menu(Host, [], Lang, JID),
+    ?INFO_MSG("make_host_menu(~p, ~p) ", [Base, Items]),
     lists:map(fun ({URI, Name}) ->
 		      {<<Base/binary, URI/binary, "/">>, Name};
 		  ({URI, Name, _SubMenu}) ->
@@ -2812,6 +2814,7 @@ make_node_menu(_Host, _Node, _Lang) ->
     {<<"">>, <<"">>, []}.
 
 make_server_menu(HostMenu, NodeMenu, Lang, JID) ->
+    ?INFO_MSG("make_server_menu(~p) ", [HostMenu]),
     Base = get_base_path(global, cluster),
     Fixed = [{<<"acls">>, <<"Access Control Lists">>},
 	     {<<"access">>, <<"Access Rules">>},

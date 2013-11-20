@@ -75,7 +75,13 @@
 
 -record(state, {vhost, dbmod, backendPid, monref, purgeRef, pollRef, dbopts, dbs, dolog_default, ignore_jids, groupchat, purge_older_days, poll_users_settings, drop_messages_on_user_removal}).
 
-ets_settings_table(VHost) -> list_to_atom("ets_logdb_settings_" ++ VHost).
+ets_settings_table(VHost) -> list_to_atom("ets_logdb_settings_" ++ escape_vhost(VHost)).
+
+escape_vhost(VHost) -> 
+  case is_binary(VHost) of
+    true -> binary_to_list(VHost);
+    _ -> VHost
+  end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
@@ -86,7 +92,7 @@ ets_settings_table(VHost) -> list_to_atom("ets_logdb_settings_" ++ VHost).
 start(VHost, Opts) ->
     ChildSpec =
         {gen_mod:get_module_proc(VHost, ?PROCNAME),
-         {?MODULE, start_link, [binary_to_list(VHost), Opts]},
+         {?MODULE, start_link, [VHost, Opts]},
          permanent,
          1000,
          worker,
@@ -300,9 +306,9 @@ handle_cast({remove_user, User}, #state{dbmod=DBMod, vhost=VHost}=State) ->
     case State#state.drop_messages_on_user_removal of
          true ->
            DBMod:drop_user(User, VHost),
-           ?INFO_MSG("Launched ~s@~s removal", [User, VHost]);
+           ?INFO_MSG("Launched ~s@~s removal", [User, escape_vhost(VHost)]);
          false ->
-           ?INFO_MSG("Message removing is disabled. Keeping messages for ~s@~s", [User, VHost])
+           ?INFO_MSG("Message removing is disabled. Keeping messages for ~s@~s", [User, escape_vhost(VHost)])
     end,
     {noreply, State};
 % ejabberdctl rebuild_stats/3
@@ -511,6 +517,33 @@ packet_parse(Owner, Peer, Packet, Direction, State) ->
          false ->
            ignore;
          Body_xml ->
+           case xml:get_subtag(Packet, "html") of
+              false ->
+                ok;
+              Html_xml ->
+                case xml:get_subtag(Html_xml, "body") of
+                  false -> 
+                    ok;
+                  Extra_parent_xml ->
+                    case xml:get_subtag(Extra_parent_xml, "extra") of
+                      false ->
+                        ok;
+                      Extra_xml ->
+                        case xml:get_subtag(Extra_xml, "log") of
+                          false ->
+                            ok;
+                          Log_xml ->
+                            Log_body = xml:get_tag_cdata(Log_xml),
+                            case Log_body of
+                              "false" ->
+                                throw(ignore);
+                              _ ->
+                                ok
+                            end
+                        end
+                    end
+                end
+            end,
            Message_type =
               case xml:get_tag_attr_s("type", Packet) of
                    [] -> "normal";
@@ -552,10 +585,10 @@ packet_parse(Owner, Peer, Packet, Direction, State) ->
                      xml:get_tag_cdata(Subject_xml)
               end,
 
-           OwnerName = stringprep:tolower(Owner#jid.user),
-           PName = stringprep:tolower(Peer#jid.user),
-           PServer = stringprep:tolower(Peer#jid.server),
-           PResource = Peer#jid.resource,
+           OwnerName = stringprep:tolower(escape_vhost(Owner#jid.user)),
+           PName = stringprep:tolower(escape_vhost(Peer#jid.user)),
+           PServer = stringprep:tolower(escape_vhost(Peer#jid.server)),
+           PResource = escape_vhost(Peer#jid.resource),
 
            #msg{timestamp=get_timestamp(),
                 owner_name=OwnerName,
@@ -570,10 +603,10 @@ packet_parse(Owner, Peer, Packet, Direction, State) ->
 
 % called from handle_cast({addlog, _}, _) -> true (log messages) | false (do not log messages)
 filter(Owner, Peer, State) ->
-    OwnerStr = Owner#jid.luser++"@"++Owner#jid.lserver,
-    OwnerServ = "@"++Owner#jid.lserver,
-    PeerStr = Peer#jid.luser++"@"++Peer#jid.lserver,
-    PeerServ = "@"++Peer#jid.lserver,
+    OwnerStr = escape_vhost(Owner#jid.luser)++"@"++escape_vhost(Owner#jid.lserver),
+    OwnerServ = "@"++escape_vhost(Owner#jid.lserver),
+    PeerStr = escape_vhost(Peer#jid.luser)++"@"++escape_vhost(Peer#jid.lserver),
+    PeerServ = "@"++escape_vhost(Peer#jid.lserver),
 
     LogTo = case ets:match_object(ets_settings_table(State#state.vhost),
                                   #user_settings{owner_name=Owner#jid.luser, _='_'}) of
@@ -759,7 +792,7 @@ vhost_messages_parse_query(VHost, Query) ->
              Dates = get_dates(VHost),
              PDates = lists:filter(
                               fun(Date) ->
-                                   ID = jlib:encode_base64(binary_to_list(term_to_binary(VHost++Date))),
+                                   ID = jlib:encode_base64(binary_to_list(term_to_binary(escape_vhost(VHost)++Date))),
                                    lists:member({"selected", ID}, Query)
                               end, Dates),
              Proc = gen_mod:get_module_proc(VHost, ?PROCNAME),
@@ -783,7 +816,7 @@ vhost_messages_at_parse_query(VHost, Date, Stats, Query) ->
          {value, _} ->
              PStats = lists:filter(
                               fun({User, _Count}) ->
-                                   ID = jlib:encode_base64(binary_to_list(term_to_binary(User++VHost))),
+                                   ID = jlib:encode_base64(binary_to_list(term_to_binary(User++escape_vhost(VHost)))),
                                    lists:member({"selected", ID}, Query)
                               end, Stats),
              Proc = gen_mod:get_module_proc(VHost, ?PROCNAME),
@@ -1083,7 +1116,7 @@ get_local_items(Acc, From, #jid{lserver = LServer} = To, Node, Lang) ->
         false ->
             Acc;
         _ ->
-            LNode = string:tokens(Node, "/"),
+            LNode = string:tokens(escape_vhost(Node), "/"),
             AllowAdmin = acl:match_rule(LServer, mod_logdb_admin, From),
             case LNode of
                  ["mod_logdb"] ->
@@ -1160,7 +1193,7 @@ get_local_features(Acc, From, #jid{lserver = LServer} = _To, Node, _Lang) ->
         false ->
             Acc;
         _ ->
-            LNode = string:tokens(Node, "/"),
+            LNode = string:tokens(escape_vhost(Node), "/"),
             AllowUser = acl:match_rule(LServer, mod_logdb, From),
             AllowAdmin = acl:match_rule(LServer, mod_logdb_admin, From),
             case LNode of
@@ -1194,7 +1227,7 @@ get_local_features(Acc, From, #jid{lserver = LServer} = _To, Node, _Lang) ->
         ?INFO_IDENTITY("automation", "command-node", Name, Lang)).
 
 get_local_identity(Acc, _From, _To, Node, Lang) ->
-    LNode = string:tokens(Node, "/"),
+    LNode = string:tokens(escape_vhost(Node), "/"),
     case LNode of
          ["mod_logdb"] ->
             ?INFO_COMMAND("Messages logging engine", Lang);
@@ -1247,7 +1280,7 @@ adhoc_local_items(Acc, From, #jid{lserver = LServer, server = Server} = To,
 recursively_get_local_items(_LServer, "mod_logdb_users", _Server, _Lang) ->
     [];
 recursively_get_local_items(LServer, Node, Server, Lang) ->
-    LNode = string:tokens(Node, "/"),
+    LNode = string:tokens(escape_vhost(Node), "/"),
     Items = case get_local_items(LServer, LNode, Server, Lang) of
                 {result, Res} ->
                     Res;
@@ -1278,7 +1311,7 @@ recursively_get_local_items(LServer, Node, Server, Lang) ->
 
 adhoc_local_commands(Acc, From, #jid{lserver = LServer} = To,
                      #adhoc_request{node = Node} = Request) ->
-    LNode = string:tokens(Node, "/"),
+    LNode = string:tokens(escape_vhost(Node), "/"),
     AllowUser = acl:match_rule(LServer, mod_logdb, From),
     AllowAdmin = acl:match_rule(LServer, mod_logdb_admin, From),
     case LNode of
@@ -1298,7 +1331,7 @@ adhoc_local_commands(From, #jid{lserver = LServer} = _To,
                                     sessionid = SessionID,
                                     action = Action,
                                     xdata = XData} = Request) ->
-    LNode = string:tokens(Node, "/"),
+    LNode = string:tokens(escape_vhost(Node), "/"),
     %% If the "action" attribute is not present, it is
     %% understood as "execute".  If there was no <actions/>
     %% element in the first response (which there isn't in our
@@ -1718,7 +1751,7 @@ get_all_vh_users(Host, Server, Lang) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 webadmin_menu(Acc, _Host, Lang) ->
     ?INFO_MSG("webadmin(~p) ", [_Host]),
-    [{"messages", ?T("Users Messages")} | Acc].
+    [{<<"messages">>, ?T(<<"Users Messages">>)} | Acc].
 
 webadmin_user(Acc, User, Server, Lang) ->
     Sett = get_user_settings(User, Server),
