@@ -538,7 +538,7 @@ mysql_connect(Server, Port, DB, Username, Password) ->
 			  binary_to_list(DB), fun log/3)
 	of
       {ok, Ref} ->
-	  p1_mysql_conn:fetch(Ref, [<<"set names 'utf8';">>],
+	  p1_mysql_conn:fetch(Ref, [<<"set names 'utf8mb4';">>],
 			   self()),
 	  {ok, Ref};
       Err -> Err

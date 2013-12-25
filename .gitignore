@@ -4,6 +4,8 @@
 *~
 \#*#
 .#*
+*.beam
+*.sublime*
 /Makefile
 /config.log
 /config.status
