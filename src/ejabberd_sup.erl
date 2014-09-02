@@ -171,7 +171,7 @@ init([]) ->
     {ok, {{one_for_one, 10, 1},
 	  [Hooks,
 	   NodeGroups,
-	   SystemMonitor,
+	   %SystemMonitor,
 	   Router,
 	   SM,
 	   S2S,
