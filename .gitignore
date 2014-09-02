@@ -4,6 +4,7 @@
 *~
 \#*#
 .#*
+rel/ejabberd
 /Makefile
 /config.log
 /config.status
