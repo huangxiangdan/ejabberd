@@ -160,6 +160,13 @@ init([]) ->
 	 infinity,
 	 supervisor,
 	 [ejabberd_tmp_sup]},
+	 SMBackendSupervisor =
+    {ejabberd_sm_backend_sup,
+     {ejabberd_sm_backend_sup, start_link, []},
+     permanent,
+     infinity,
+     supervisor,
+     [ejabberd_sm_backend_sup]},
     IQSupervisor =
 	{ejabberd_iq_sup,
 	 {ejabberd_tmp_sup, start_link,
@@ -171,6 +178,7 @@ init([]) ->
     {ok, {{one_for_one, 10, 1},
 	  [Hooks,
 	   NodeGroups,
+	   SMBackendSupervisor,
 	   %SystemMonitor,
 	   Router,
 	   SM,
